@@ -86,13 +86,19 @@ class MainWindow(ctk.CTk):
         # 可选字段
         self.show_channel_link_var = ctk.BooleanVar(value=self.config_manager.get_show_optional_fields()['show_channel_link'])
         self.show_description_var = ctk.BooleanVar(value=self.config_manager.get_show_optional_fields()['show_video_description'])
+        self.skip_contact_var = ctk.BooleanVar(value=False)
 
         ctk.CTkCheckBox(config_frame, text="显示频道链接", variable=self.show_channel_link_var).grid(row=3, column=0, padx=10, pady=10, sticky="w")
         ctk.CTkCheckBox(config_frame, text="显示视频描述", variable=self.show_description_var).grid(row=3, column=1, padx=10, pady=10, sticky="w")
+        ctk.CTkCheckBox(
+            config_frame,
+            text="跳过联系方式获取（遇到网络问题时勾选）",
+            variable=self.skip_contact_var
+        ).grid(row=4, column=0, columnspan=2, padx=10, pady=5, sticky="w")
 
         # 开始按钮
         self.start_button = ctk.CTkButton(config_frame, text="开始搜索", command=self._start_collection, width=200, height=40)
-        self.start_button.grid(row=4, column=0, columnspan=2, pady=20)
+        self.start_button.grid(row=5, column=0, columnspan=2, pady=20)
 
         # 进度区域
         progress_frame = ctk.CTkFrame(self)
@@ -162,20 +168,23 @@ class MainWindow(ctk.CTk):
         self.collected_data = []
         self.preview_text.delete("1.0", "end")
 
+        # 获取跳过联系方式选项
+        skip_contact = self.skip_contact_var.get()
+
         # 在新线程中执行
         self.collector_thread = threading.Thread(
             target=self._collect_data,
-            args=(keyword, max_results, order),
+            args=(keyword, max_results, order, skip_contact),
             daemon=True
         )
         self.collector_thread.start()
 
-    def _collect_data(self, keyword, max_results, order):
+    def _collect_data(self, keyword, max_results, order, skip_contact=False):
         """采集数据（在后台线程中执行）"""
         try:
             # 初始化 API
             youtube_api = YouTubeAPI(self.config_manager, self.logger)
-            deepseek_api = DeepSeekAPI(self.config_manager.get_deepseek_api_key(), self.logger)
+            deepseek_api = DeepSeekAPI(self.config_manager.get_deepseek_api_key(), self.logger) if not skip_contact else None
 
             # 创建采集器
             collector = DataCollector(youtube_api, deepseek_api, self.cache_manager, self.logger)
@@ -185,6 +194,7 @@ class MainWindow(ctk.CTk):
                 keyword=keyword,
                 max_results=max_results,
                 order=order,
+                skip_contact=skip_contact,
                 progress_callback=self._update_progress,
                 status_callback=self._update_status
             )

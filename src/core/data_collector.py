@@ -61,6 +61,7 @@ class DataCollector:
         keyword: str,
         max_results: int = 100,
         order: str = 'relevance',
+        skip_contact: bool = False,
         progress_callback: Optional[Callable] = None,
         status_callback: Optional[Callable] = None
     ) -> List[Dict]:
@@ -71,6 +72,7 @@ class DataCollector:
             keyword: 搜索关键词
             max_results: 最大结果数
             order: 排序方式
+            skip_contact: 是否跳过联系方式获取（遇到网络问题时可开启）
             progress_callback: 进度回调 callback(percent, current, total, status)
             status_callback: 状态回调 callback(status_message)
 
@@ -116,12 +118,19 @@ class DataCollector:
                 return []
 
             # 阶段3: 获取频道信息和联系方式 (80-95%)
-            if status_callback:
-                status_callback("正在获取频道信息和联系方式...")
+            if skip_contact:
+                if status_callback:
+                    status_callback("跳过联系方式获取，正在整理数据...")
+                if self.logger:
+                    self.logger.info("用户选择跳过联系方式获取")
+            else:
+                if status_callback:
+                    status_callback("正在获取频道信息和联系方式...")
 
             final_data = self._enrich_with_channel_data(
                 videos_data,
                 keyword,
+                skip_contact,
                 progress_callback
             )
 
@@ -284,6 +293,7 @@ class DataCollector:
         self,
         videos_data: List[Dict],
         keyword: str,
+        skip_contact: bool,
         progress_callback: Optional[Callable]
     ) -> List[Dict]:
         """
@@ -292,11 +302,16 @@ class DataCollector:
         Args:
             videos_data: 视频数据列表
             keyword: 搜索关键词
+            skip_contact: 是否跳过联系方式获取
             progress_callback: 进度回调
 
         Returns:
             List[Dict]: 完整的数据列表
         """
+        # 如果跳过联系方式，直接组装数据
+        if skip_contact:
+            return self._assemble_final_data_without_contact(videos_data, keyword, progress_callback)
+
         # 提取唯一的频道ID
         channel_ids = list(set([v['channel_id'] for v in videos_data]))
         total_channels = len(channel_ids)
@@ -308,8 +323,8 @@ class DataCollector:
         # 频道数据缓存（本次采集session内）
         channel_data_cache = {}
 
-        # 使用线程池并发获取频道信息（控制并发数为5）
-        with ThreadPoolExecutor(max_workers=5) as executor:
+        # 使用线程池并发获取频道信息（控制并发数为3，进一步降低SSL错误）
+        with ThreadPoolExecutor(max_workers=3) as executor:
             futures = {}
 
             for channel_id in channel_ids:
@@ -450,6 +465,64 @@ class DataCollector:
             if self.logger:
                 self.logger.error(f"处理频道 {channel_id} 时出错: {e}")
             return None
+
+    def _assemble_final_data_without_contact(
+        self,
+        videos_data: List[Dict],
+        keyword: str,
+        progress_callback: Optional[Callable]
+    ) -> List[Dict]:
+        """
+        组装数据（不获取联系方式，避免SSL错误）
+
+        Args:
+            videos_data: 视频数据列表
+            keyword: 搜索关键词
+            progress_callback: 进度回调
+
+        Returns:
+            List[Dict]: 完整的数据列表
+        """
+        final_data = []
+
+        total = len(videos_data)
+        for index, video in enumerate(videos_data, 1):
+            # 构建完整数据（联系方式标记为"未获取"）
+            data_item = {
+                'keyword': keyword,
+                'channel_title': video['channel_title'],
+                'video_link': f"https://www.youtube.com/watch?v={video['video_id']}",
+                'view_count': video['view_count'],
+                'engagement_rate': f"{calculate_engagement_rate(video['like_count'], video['comment_count'], video['view_count']):.2f}%",
+                'contact_info': '未获取（跳过）',
+                'like_count': video['like_count'],
+                'comment_count': video['comment_count'],
+                'video_title': video['title'],
+                'published_at': format_date(video['published_at']),
+                'duration': parse_duration(video['duration']),
+                'subscriber_count': 0,  # 未获取
+                'channel_link': f"https://www.youtube.com/channel/{video['channel_id']}",
+                'description': truncate_text(video.get('description', ''), 200),
+                'language': video.get('default_language', 'unknown')
+            }
+
+            final_data.append(data_item)
+            self.stats['success'] += 1
+
+            # 更新进度 (80-100%)
+            if progress_callback:
+                percent = 80 + int(20 * index / total)
+                progress_callback(
+                    percent,
+                    index,
+                    total,
+                    f"正在整理数据... ({index}/{total})"
+                )
+
+        if progress_callback:
+            progress_callback(100, total, total, "数据处理完成")
+
+        return final_data
 
     def get_stats(self) -> Dict:
         """获取采集统计信息"""
