@@ -1,0 +1,66 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# 虚拟环境
+venv/
+ENV/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 配置文件（包含 API Key）
+config.json
+cache.json
+
+# 日志
+logs/
+*.log
+
+# 测试
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 打包
+*.spec
+build/
+dist/
+
+# 临时文件
+*.tmp
+temp/
+
+# Excel 输出
+*.xlsx
+!example.xlsx
+
+# MacOS
+.DS_Store
+
+# Windows
+Thumbs.db
+desktop.ini
