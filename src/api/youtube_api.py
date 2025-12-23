@@ -4,6 +4,8 @@ YouTube API 封装模块
 """
 
 import time
+import ssl
+import httplib2
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
 from googleapiclient.discovery import build
@@ -149,7 +151,19 @@ class YouTubeAPI:
 
         if key_info:
             self.current_api_key = key_info['key']
-            self.youtube = build('youtube', 'v3', developerKey=self.current_api_key)
+
+            # 创建自定义 HTTP 对象，配置更宽松的 SSL 设置
+            try:
+                # 尝试创建带有自定义 SSL 上下文的 HTTP 对象
+                http = httplib2.Http(
+                    timeout=30,
+                    disable_ssl_certificate_validation=False
+                )
+                self.youtube = build('youtube', 'v3', developerKey=self.current_api_key, http=http)
+            except Exception:
+                # 如果失败，使用默认方式
+                self.youtube = build('youtube', 'v3', developerKey=self.current_api_key)
+
             if self.logger:
                 self.logger.info(f"使用 API Key: {key_info.get('name', 'Unknown')}")
         else:
@@ -218,9 +232,22 @@ class YouTubeAPI:
                     return None
 
             except Exception as e:
-                if self.logger:
-                    self.logger.error(f"未知错误: {e}")
-                return None
+                # SSL 错误或网络错误，可以重试
+                error_str = str(e).lower()
+                is_retryable = any(keyword in error_str for keyword in [
+                    'ssl', 'timeout', 'connection', 'network', 'socket'
+                ])
+
+                if is_retryable and attempt < max_retries - 1:
+                    wait_time = 2 * (attempt + 1)
+                    if self.logger:
+                        self.logger.warning(f"网络错误 (尝试 {attempt + 1}/{max_retries}): {e}，{wait_time}秒后重试")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    if self.logger:
+                        self.logger.error(f"未知错误: {e}")
+                    return None
 
         return None
 
