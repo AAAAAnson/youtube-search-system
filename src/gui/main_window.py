@@ -210,13 +210,30 @@ class MainWindow(ctk.CTk):
         """采集完成"""
         self.after(0, self._reset_ui)
         self.after(0, lambda: self._show_preview())
+
+        success_count = len(self.collected_data)
+        failed_count = stats.get('failed', 0)
+        total_count = stats.get('total', 0)
+
         self.after(0, lambda: self.stats_label.configure(
-            text=f"成功: {stats['success']} 条, 失败: {stats['failed']} 条"
+            text=f"成功: {success_count} 条, 失败: {failed_count} 条 (总计: {total_count})"
         ))
 
-        if self.collected_data:
+        if self.collected_data and len(self.collected_data) > 0:
             self.after(0, lambda: self.export_button.configure(state="normal"))
-            self.after(0, lambda: messagebox.showinfo("完成", f"采集完成！共获取 {len(self.collected_data)} 条数据"))
+            if failed_count > 0:
+                self.after(0, lambda: messagebox.showwarning(
+                    "采集完成",
+                    f"采集完成！\n\n成功: {success_count} 条\n失败: {failed_count} 条\n\n" +
+                    f"失败原因：部分视频因网络问题（SSL错误）无法获取。\n建议：稍后重试或检查网络环境。"
+                ))
+            else:
+                self.after(0, lambda: messagebox.showinfo("完成", f"采集完成！共获取 {success_count} 条数据"))
+        else:
+            self.after(0, lambda: messagebox.showerror(
+                "失败",
+                "采集失败，未获取到任何数据。\n\n可能原因：\n1. 网络连接问题（SSL错误）\n2. API Key无效\n\n请检查日志了解详情。"
+            ))
 
     def _show_preview(self):
         """显示数据预览"""

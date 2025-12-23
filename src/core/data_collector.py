@@ -217,8 +217,8 @@ class DataCollector:
         batch_size = 50
         batches = [video_ids[i:i+batch_size] for i in range(0, len(video_ids), batch_size)]
 
-        # 使用线程池并发处理（控制并发数为8-10）
-        with ThreadPoolExecutor(max_workers=10) as executor:
+        # 使用线程池并发处理（控制并发数为5，避免SSL错误）
+        with ThreadPoolExecutor(max_workers=5) as executor:
             futures = {}
 
             for batch in batches:
@@ -228,8 +228,8 @@ class DataCollector:
                 future = executor.submit(self.youtube_api.get_video_details, batch)
                 futures[future] = batch
 
-                # 控制请求间隔
-                time.sleep(0.1)
+                # 控制请求间隔（增加到0.3秒，避免SSL错误）
+                time.sleep(0.3)
 
             # 收集结果
             for future in as_completed(futures):
@@ -238,10 +238,25 @@ class DataCollector:
 
                 try:
                     batch_videos = future.result()
-                    videos_data.extend(batch_videos)
-                    processed += len(futures[future])
 
+                    if batch_videos:
+                        videos_data.extend(batch_videos)
+                        # 实际成功的数量
+                        actual_success = len(batch_videos)
+                    else:
+                        actual_success = 0
+
+                    # 请求的数量
+                    requested = len(futures[future])
+                    failed = requested - actual_success
+
+                    processed += requested
                     self.stats['processed'] = processed
+
+                    if failed > 0:
+                        self.stats['failed'] += failed
+                        if self.logger:
+                            self.logger.warning(f"批次部分失败: 成功 {actual_success}/{requested}")
 
                     # 更新进度 (20-80%)
                     if progress_callback:
@@ -250,13 +265,15 @@ class DataCollector:
                             percent,
                             processed,
                             total,
-                            f"正在获取视频详情... ({processed}/{total})"
+                            f"正在获取视频详情... ({len(videos_data)}/{processed})"
                         )
 
                 except Exception as e:
                     if self.logger:
                         self.logger.error(f"获取视频详情失败: {e}")
-                    self.stats['failed'] += len(futures[future])
+                    batch_size_failed = len(futures[future])
+                    processed += batch_size_failed
+                    self.stats['failed'] += batch_size_failed
 
         if self.logger:
             self.logger.info(f"成功获取 {len(videos_data)} 个视频的详情")
