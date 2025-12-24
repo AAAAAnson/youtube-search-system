@@ -12,7 +12,7 @@ sys.path.insert(0, str(project_root))
 from src.core.config_manager import ConfigManager
 from src.core.cache_manager import CacheManager
 from src.utils.logger import init_logger
-from src.gui.main_window import MainWindow
+from src.gui.main_window_harmony import HarmonyMainWindow  # 使用鸿蒙风格窗口
 from src.gui.setup_wizard import SetupWizard
 
 
@@ -43,9 +43,9 @@ def main():
             logger.info("用户取消配置，程序退出")
             return
 
-    # 启动主窗口
-    logger.info("启动主窗口")
-    app = MainWindow(config_manager, cache_manager, logger)
+    # 启动主窗口（鸿蒙风格）
+    logger.info("启动主窗口（鸿蒙风格）")
+    app = HarmonyMainWindow(config_manager, cache_manager, logger)
     app.mainloop()
 
     logger.info("程序正常退出")
