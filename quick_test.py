@@ -17,7 +17,7 @@ def test_youtube_api():
 
     # 初始化
     config = ConfigManager()
-    logger = Logger()
+    logger = Logger(config.config_dir)
 
     # 检查API Key
     keys = config.get_youtube_api_keys()
