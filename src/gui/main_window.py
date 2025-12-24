@@ -199,11 +199,18 @@ class MainWindow(ctk.CTk):
                 status_callback=self._update_status
             )
 
+            # DEBUG: 记录采集结果
+            self.logger.info(f"[DEBUG] 采集完成，collected_data 长度: {len(self.collected_data)}")
+            self.logger.info(f"[DEBUG] collected_data 类型: {type(self.collected_data)}")
+            if self.collected_data:
+                self.logger.info(f"[DEBUG] 第一条数据示例: {list(self.collected_data[0].keys())}")
+
             # 采集完成
             self._on_collection_complete(collector.get_stats())
 
         except Exception as e:
             self.logger.error(f"采集失败: {e}")
+            self.logger.exception(e)  # 打印完整堆栈
             self.after(0, lambda: messagebox.showerror("错误", f"采集失败: {e}"))
             self.after(0, self._reset_ui)
 
@@ -218,6 +225,11 @@ class MainWindow(ctk.CTk):
 
     def _on_collection_complete(self, stats):
         """采集完成"""
+        # DEBUG: 记录回调被触发
+        self.logger.info(f"[DEBUG] _on_collection_complete 被调用")
+        self.logger.info(f"[DEBUG] stats: {stats}")
+        self.logger.info(f"[DEBUG] collected_data 长度: {len(self.collected_data)}")
+
         self.after(0, self._reset_ui)
         self.after(0, lambda: self._show_preview())
 
@@ -225,12 +237,17 @@ class MainWindow(ctk.CTk):
         failed_count = stats.get('failed', 0)
         total_count = stats.get('total', 0)
 
+        self.logger.info(f"[DEBUG] success_count={success_count}, failed_count={failed_count}, total_count={total_count}")
+
         self.after(0, lambda: self.stats_label.configure(
             text=f"成功: {success_count} 条, 失败: {failed_count} 条 (总计: {total_count})"
         ))
 
         if self.collected_data and len(self.collected_data) > 0:
+            self.logger.info(f"[DEBUG] 准备启用导出按钮，collected_data 有 {len(self.collected_data)} 条数据")
             self.after(0, lambda: self.export_button.configure(state="normal"))
+            self.logger.info(f"[DEBUG] 导出按钮已设置为 normal 状态")
+
             if failed_count > 0:
                 self.after(0, lambda: messagebox.showwarning(
                     "采集完成",
@@ -240,6 +257,7 @@ class MainWindow(ctk.CTk):
             else:
                 self.after(0, lambda: messagebox.showinfo("完成", f"采集完成！共获取 {success_count} 条数据"))
         else:
+            self.logger.warning(f"[DEBUG] collected_data 为空，不启用导出按钮")
             self.after(0, lambda: messagebox.showerror(
                 "失败",
                 "采集失败，未获取到任何数据。\n\n可能原因：\n1. 网络连接问题（SSL错误）\n2. API Key无效\n\n请检查日志了解详情。"

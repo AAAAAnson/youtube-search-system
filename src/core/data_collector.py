@@ -148,6 +148,10 @@ class DataCollector:
                     f"失败: {self.stats['failed']}, "
                     f"耗时: {elapsed_time:.1f}秒"
                 )
+                # DEBUG: 记录返回数据
+                self.logger.info(f"[DEBUG] DataCollector.collect() 返回 {len(final_data)} 条数据")
+                if final_data:
+                    self.logger.info(f"[DEBUG] 返回数据示例字段: {list(final_data[0].keys())}")
 
             if progress_callback:
                 progress_callback(100, self.stats['success'], self.stats['total'], "采集完成")
@@ -286,6 +290,7 @@ class DataCollector:
 
         if self.logger:
             self.logger.info(f"成功获取 {len(videos_data)} 个视频的详情")
+            self.logger.info(f"[DEBUG] _get_videos_details() 返回 {len(videos_data)} 条视频数据")
 
         return videos_data
 
@@ -395,6 +400,9 @@ class DataCollector:
         # 最后阶段完成 (95-100%)
         if progress_callback:
             progress_callback(100, len(final_data), len(videos_data), "数据处理完成")
+
+        if self.logger:
+            self.logger.info(f"[DEBUG] _enrich_with_channel_data() 返回 {len(final_data)} 条数据")
 
         return final_data
 
@@ -521,6 +529,9 @@ class DataCollector:
 
         if progress_callback:
             progress_callback(100, total, total, "数据处理完成")
+
+        if self.logger:
+            self.logger.info(f"[DEBUG] _assemble_final_data_without_contact() 返回 {len(final_data)} 条数据")
 
         return final_data
 
