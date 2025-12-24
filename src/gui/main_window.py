@@ -5,12 +5,14 @@ YouTube 数据采集工具的主界面
 
 import customtkinter as ctk
 import threading
+from datetime import datetime
 from tkinter import filedialog, messagebox
 from pathlib import Path
 
 from src.core.config_manager import ConfigManager
 from src.core.cache_manager import CacheManager
 from src.core.data_collector import DataCollector
+from src.core.search_history_manager import SearchHistoryManager
 from src.api.youtube_api import YouTubeAPI
 from src.api.deepseek_api import DeepSeekAPI
 from src.utils.excel_exporter import ExcelExporter
@@ -26,6 +28,7 @@ class MainWindow(ctk.CTk):
         self.config_manager = config_manager
         self.cache_manager = cache_manager
         self.logger = logger
+        self.search_history_manager = SearchHistoryManager(config_manager.config_dir)
 
         # 窗口配置
         self.title("YouTube 数据采集工具 v1.0.0")
@@ -83,22 +86,42 @@ class MainWindow(ctk.CTk):
         self.sort_combo.grid(row=2, column=1, padx=10, pady=10, sticky="w")
         self.sort_combo.set("相关性")
 
+        # 年份筛选
+        ctk.CTkLabel(config_frame, text="年份范围:").grid(row=3, column=0, padx=10, pady=10, sticky="w")
+        year_frame = ctk.CTkFrame(config_frame)
+        year_frame.grid(row=3, column=1, padx=10, pady=10, sticky="w")
+
+        current_year = datetime.now().year
+        years = ["不限"] + [str(y) for y in range(2005, current_year + 1)]
+
+        ctk.CTkLabel(year_frame, text="从").pack(side="left", padx=5)
+        self.year_from_combo = ctk.CTkComboBox(year_frame, values=years, width=80)
+        self.year_from_combo.set("不限")
+        self.year_from_combo.pack(side="left", padx=5)
+
+        ctk.CTkLabel(year_frame, text="到").pack(side="left", padx=5)
+        self.year_to_combo = ctk.CTkComboBox(year_frame, values=years, width=80)
+        self.year_to_combo.set("不限")
+        self.year_to_combo.pack(side="left", padx=5)
+
         # 可选字段
         self.show_channel_link_var = ctk.BooleanVar(value=self.config_manager.get_show_optional_fields()['show_channel_link'])
         self.show_description_var = ctk.BooleanVar(value=self.config_manager.get_show_optional_fields()['show_video_description'])
         self.skip_contact_var = ctk.BooleanVar(value=False)
+        self.exact_match_var = ctk.BooleanVar(value=False)
 
-        ctk.CTkCheckBox(config_frame, text="显示频道链接", variable=self.show_channel_link_var).grid(row=3, column=0, padx=10, pady=10, sticky="w")
-        ctk.CTkCheckBox(config_frame, text="显示视频描述", variable=self.show_description_var).grid(row=3, column=1, padx=10, pady=10, sticky="w")
+        ctk.CTkCheckBox(config_frame, text="显示频道链接", variable=self.show_channel_link_var).grid(row=4, column=0, padx=10, pady=5, sticky="w")
+        ctk.CTkCheckBox(config_frame, text="显示视频描述", variable=self.show_description_var).grid(row=4, column=1, padx=10, pady=5, sticky="w")
+        ctk.CTkCheckBox(config_frame, text="精确匹配关键词", variable=self.exact_match_var).grid(row=5, column=0, padx=10, pady=5, sticky="w")
         ctk.CTkCheckBox(
             config_frame,
             text="跳过联系方式获取（遇到网络问题时勾选）",
             variable=self.skip_contact_var
-        ).grid(row=4, column=0, columnspan=2, padx=10, pady=5, sticky="w")
+        ).grid(row=5, column=1, padx=10, pady=5, sticky="w")
 
         # 开始按钮
         self.start_button = ctk.CTkButton(config_frame, text="开始搜索", command=self._start_collection, width=200, height=40)
-        self.start_button.grid(row=5, column=0, columnspan=2, pady=20)
+        self.start_button.grid(row=6, column=0, columnspan=2, pady=20)
 
         # 进度区域
         progress_frame = ctk.CTkFrame(self)
@@ -172,6 +195,42 @@ class MainWindow(ctk.CTk):
         sort_map = {"相关性": "relevance", "发布日期": "date", "观看次数": "viewCount", "评分": "rating"}
         order = sort_map[self.sort_combo.get()]
 
+        # 获取年份范围
+        year_from_str = self.year_from_combo.get()
+        year_to_str = self.year_to_combo.get()
+        year_from = int(year_from_str) if year_from_str != "不限" else None
+        year_to = int(year_to_str) if year_to_str != "不限" else None
+
+        # 获取精确匹配选项
+        exact_match = self.exact_match_var.get()
+
+        # 检查是否有历史搜索记录
+        search_progress = self.search_history_manager.get_search_progress(
+            keyword, year_from, year_to, exact_match, order
+        )
+
+        resume_search = False
+        if search_progress and not search_progress.get('is_complete'):
+            # 询问用户是否继续上次搜索
+            existing_count = search_progress.get('total_videos', 0)
+            response = messagebox.askyesnocancel(
+                "发现历史搜索",
+                f"发现相同条件的历史搜索记录：\n\n"
+                f"关键词: {keyword}\n"
+                f"年份: {year_from or '不限'} - {year_to or '不限'}\n"
+                f"已获取: {existing_count} 个视频\n\n"
+                f"是否继续上次搜索？\n"
+                f"【是】继续搜索 【否】重新搜索 【取消】取消操作"
+            )
+
+            if response is None:  # 用户点击取消
+                return
+            elif response:  # 用户选择继续
+                resume_search = True
+            else:  # 用户选择重新搜索
+                self.search_history_manager.clear_search_history(keyword, year_from, year_to, exact_match, order)
+                search_progress = None
+
         # 开始采集
         self.is_collecting = True
         self.start_button.configure(state="disabled")
@@ -183,12 +242,13 @@ class MainWindow(ctk.CTk):
         # 在新线程中执行
         self.collector_thread = threading.Thread(
             target=self._collect_data,
-            args=(keyword, max_results, order, skip_contact),
+            args=(keyword, max_results, order, skip_contact, year_from, year_to, exact_match, search_progress),
             daemon=True
         )
         self.collector_thread.start()
 
-    def _collect_data(self, keyword, max_results, order, skip_contact=False):
+    def _collect_data(self, keyword, max_results, order, skip_contact=False,
+                      year_from=None, year_to=None, exact_match=False, search_progress=None):
         """采集数据（在后台线程中执行）"""
         try:
             # 初始化 API
@@ -204,6 +264,11 @@ class MainWindow(ctk.CTk):
                 max_results=max_results,
                 order=order,
                 skip_contact=skip_contact,
+                year_from=year_from,
+                year_to=year_to,
+                exact_match=exact_match,
+                search_progress=search_progress,
+                search_history_manager=self.search_history_manager,
                 progress_callback=self._update_progress,
                 status_callback=self._update_status
             )

@@ -266,7 +266,10 @@ class YouTubeAPI:
         keyword: str,
         max_results: int = 50,
         order: str = 'relevance',
-        page_token: Optional[str] = None
+        page_token: Optional[str] = None,
+        year_from: Optional[int] = None,
+        year_to: Optional[int] = None,
+        exact_match: bool = False
     ) -> Tuple[List[str], Optional[str]]:
         """
         搜索视频
@@ -276,21 +279,42 @@ class YouTubeAPI:
             max_results: 最大结果数（每页最多50）
             order: 排序方式 (relevance/date/viewCount/rating)
             page_token: 分页令牌
+            year_from: 起始年份
+            year_to: 结束年份
+            exact_match: 是否精确匹配关键词
 
         Returns:
             Tuple[List[str], Optional[str]]: (视频ID列表, 下一页令牌)
         """
-        if self.logger:
-            self.logger.info(f"搜索关键词: {keyword}, 排序: {order}, 每页: {max_results}")
+        # 处理精确匹配
+        search_keyword = f'"{keyword}"' if exact_match else keyword
 
-        request = self.youtube.search().list(
-            part='id',
-            q=keyword,
-            type='video',
-            maxResults=min(max_results, 50),  # API 限制最多50
-            order=order,
-            pageToken=page_token
-        )
+        # 构建搜索参数
+        search_params = {
+            "part": "id",
+            "q": search_keyword,
+            "type": "video",
+            "maxResults": min(max_results, 50),  # API 限制最多50
+            "order": order,
+            "pageToken": page_token
+        }
+
+        # 添加年份筛选
+        if year_from or year_to:
+            from datetime import datetime
+            if year_from:
+                search_params["publishedAfter"] = f"{year_from}-01-01T00:00:00Z"
+            if year_to:
+                search_params["publishedBefore"] = f"{year_to}-12-31T23:59:59Z"
+
+        if self.logger:
+            year_info = ""
+            if year_from or year_to:
+                year_info = f", 年份: {year_from or '不限'}-{year_to or '不限'}"
+            match_info = " (精确匹配)" if exact_match else ""
+            self.logger.info(f"搜索关键词: {keyword}{match_info}, 排序: {order}, 每页: {max_results}{year_info}")
+
+        request = self.youtube.search().list(**search_params)
 
         response = self._execute_with_retry(request, self.QUOTA_COSTS['search'])
 
