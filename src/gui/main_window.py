@@ -146,8 +146,12 @@ class MainWindow(ctk.CTk):
             self._open_api_manager()
             return
 
-        if not self.config_manager.get_deepseek_api_key():
-            messagebox.showerror("错误", "请先配置 DeepSeek API Key")
+        # 获取跳过联系方式选项（提前获取，用于判断是否需要 DeepSeek API）
+        skip_contact = self.skip_contact_var.get()
+
+        # 只有在不跳过联系方式时才检查 DeepSeek API Key
+        if not skip_contact and not self.config_manager.get_deepseek_api_key():
+            messagebox.showerror("错误", "请先配置 DeepSeek API Key\n\n或者勾选\"跳过联系方式获取\"选项")
             self._open_api_manager()
             return
 
@@ -167,9 +171,6 @@ class MainWindow(ctk.CTk):
         self.export_button.configure(state="disabled")
         self.collected_data = []
         self.preview_text.delete("1.0", "end")
-
-        # 获取跳过联系方式选项
-        skip_contact = self.skip_contact_var.get()
 
         # 在新线程中执行
         self.collector_thread = threading.Thread(
