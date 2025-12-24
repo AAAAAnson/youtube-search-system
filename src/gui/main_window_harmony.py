@@ -21,6 +21,7 @@ from src.gui.harmony_style import (
     HarmonyColors, HarmonyRadius, HarmonySpacing,
     HarmonyFonts, HarmonySizes, HarmonyPresets
 )
+from src.gui.harmony_resources import HarmonyResources
 
 
 class HarmonyMainWindow(ctk.CTk):
@@ -42,6 +43,9 @@ class HarmonyMainWindow(ctk.CTk):
         # 设置主题
         ctk.set_appearance_mode("light")
 
+        # 初始化资源（字体和图标）
+        self._init_resources()
+
         # 数据
         self.collected_data = []
         self.is_collecting = False
@@ -49,6 +53,76 @@ class HarmonyMainWindow(ctk.CTk):
 
         # 创建界面
         self._setup_ui()
+
+    def _init_resources(self):
+        """初始化鸿蒙资源"""
+        # 检查并注册字体
+        HarmonyResources.register_fonts()
+
+        # 获取字体族（如果鸿蒙字体存在则使用，否则降级到系统字体）
+        self.font_family = HarmonyResources.get_font_family("regular")
+        self.font_family_medium = HarmonyResources.get_font_family("medium")
+        self.font_family_bold = HarmonyResources.get_font_family("bold")
+
+        self.logger.info(f"✓ 使用字体: {self.font_family}")
+
+        # 获取图标（如果存在）
+        self.icons = {
+            'settings': HarmonyResources.get_icon('settings', (20, 20)),
+            'log': HarmonyResources.get_icon('log', (20, 20)),
+            'delete': HarmonyResources.get_icon('delete', (20, 20)),
+            'search': HarmonyResources.get_icon('search', (24, 24)),
+            'export': HarmonyResources.get_icon('export', (24, 24)),
+            'cancel': HarmonyResources.get_icon('cancel', (20, 20)),
+        }
+
+    def _get_font(self, size: int, weight: str = "regular") -> tuple:
+        """
+        获取字体tuple（用于tkinter组件）
+
+        Args:
+            size: 字号
+            weight: 字重 (regular/medium/bold)
+
+        Returns:
+            (font_family, size, weight) tuple
+        """
+        if weight == "bold":
+            return (self.font_family_bold, size, "bold")
+        elif weight == "medium":
+            return (self.font_family_medium, size, "bold")  # medium也用bold显示
+        else:
+            return (self.font_family, size, "normal")
+
+    def _get_icon_text(self, icon_name: str, text: str) -> str:
+        """
+        获取带图标的文本（如果图标不存在则使用emoji降级）
+
+        Args:
+            icon_name: 图标名称
+            text: 文本
+
+        Returns:
+            带图标的文本
+        """
+        # 如果有鸿蒙图标，CTkButton 会使用 image 参数显示，这里只返回文本
+        # 如果没有图标，返回 emoji + 文本
+        icon_emoji_map = {
+            'settings': '⚙️',
+            'log': '📋',
+            'delete': '🗑️',
+            'search': '🚀',
+            'export': '📊',
+            'cancel': '✖️',
+        }
+
+        if self.icons.get(icon_name):
+            # 有鸿蒙图标，只返回文本
+            return text
+        else:
+            # 没有图标，使用 emoji
+            emoji = icon_emoji_map.get(icon_name, '')
+            return f"{emoji} {text}" if emoji else text
 
     def _setup_ui(self):
         """设置界面"""
@@ -106,7 +180,7 @@ class HarmonyMainWindow(ctk.CTk):
         title_label = ctk.CTkLabel(
             left_frame,
             text="YouTube 数据采集工具",
-            font=(HarmonyFonts.FAMILY_FALLBACK, HarmonyFonts.SIZE_H1, HarmonyFonts.WEIGHT_MEDIUM),
+            font=self._get_font(HarmonyFonts.SIZE_H1, "medium"),
             text_color=HarmonyColors.TEXT_PRIMARY
         )
         title_label.pack(side="left")
@@ -114,7 +188,7 @@ class HarmonyMainWindow(ctk.CTk):
         version_label = ctk.CTkLabel(
             left_frame,
             text="v1.0",
-            font=(HarmonyFonts.FAMILY_FALLBACK, HarmonyFonts.SIZE_CAPTION),
+            font=self._get_font(HarmonyFonts.SIZE_CAPTION),
             text_color=HarmonyColors.TEXT_TERTIARY
         )
         version_label.pack(side="left", padx=(HarmonySpacing.SM, 0))
@@ -128,30 +202,36 @@ class HarmonyMainWindow(ctk.CTk):
 
         self.cache_btn = ctk.CTkButton(
             right_frame,
-            text="🗑️ 清除缓存",
+            text=self._get_icon_text('delete', "清除缓存"),
+            image=self.icons.get('delete'),
             width=110,
             height=HarmonySizes.BUTTON_MEDIUM,
             command=self._clear_cache,
+            compound="left",
             **btn_style
         )
         self.cache_btn.pack(side="right", padx=(HarmonySpacing.SM, 0))
 
         self.log_btn = ctk.CTkButton(
             right_frame,
-            text="📋 查看日志",
+            text=self._get_icon_text('log', "查看日志"),
+            image=self.icons.get('log'),
             width=110,
             height=HarmonySizes.BUTTON_MEDIUM,
             command=self._view_logs,
+            compound="left",
             **btn_style
         )
         self.log_btn.pack(side="right", padx=(HarmonySpacing.SM, 0))
 
         self.api_btn = ctk.CTkButton(
             right_frame,
-            text="⚙️ API 管理",
+            text=self._get_icon_text('settings', "API 管理"),
+            image=self.icons.get('settings'),
             width=110,
             height=HarmonySizes.BUTTON_MEDIUM,
             command=self._open_api_manager,
+            compound="left",
             **btn_style
         )
         self.api_btn.pack(side="right")
@@ -172,7 +252,7 @@ class HarmonyMainWindow(ctk.CTk):
         ctk.CTkLabel(
             header,
             text="搜索配置",
-            font=(HarmonyFonts.FAMILY_FALLBACK, HarmonyFonts.SIZE_H2, HarmonyFonts.WEIGHT_MEDIUM),
+            font=self._get_font(HarmonyFonts.SIZE_H2, "medium"),
             text_color=HarmonyColors.TEXT_PRIMARY
         ).pack(side="left")
 
@@ -188,7 +268,7 @@ class HarmonyMainWindow(ctk.CTk):
         ctk.CTkLabel(
             content,
             text="搜索关键词",
-            font=(HarmonyFonts.FAMILY_FALLBACK, HarmonyFonts.SIZE_BODY),
+            font=self._get_font(HarmonyFonts.SIZE_BODY),
             text_color=HarmonyColors.TEXT_SECONDARY
         ).grid(row=0, column=0, sticky="w", pady=(0, HarmonySpacing.XS))
 
@@ -196,7 +276,7 @@ class HarmonyMainWindow(ctk.CTk):
             content,
             height=HarmonySizes.INPUT_HEIGHT,
             placeholder_text="请输入关键词，例如：iPhone15",
-            font=(HarmonyFonts.FAMILY_FALLBACK, HarmonyFonts.SIZE_BODY),
+            font=self._get_font(HarmonyFonts.SIZE_BODY),
             **HarmonyPresets.input_field()
         )
         self.keyword_entry.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(0, HarmonySpacing.LG))
@@ -206,7 +286,7 @@ class HarmonyMainWindow(ctk.CTk):
         ctk.CTkLabel(
             content,
             text="最大结果数",
-            font=(HarmonyFonts.FAMILY_FALLBACK, HarmonyFonts.SIZE_BODY),
+            font=self._get_font(HarmonyFonts.SIZE_BODY),
             text_color=HarmonyColors.TEXT_SECONDARY
         ).grid(row=2, column=0, sticky="w", pady=(0, HarmonySpacing.XS))
 
@@ -214,8 +294,8 @@ class HarmonyMainWindow(ctk.CTk):
             content,
             values=["50", "100", "200", "500", "1000"],
             height=HarmonySizes.INPUT_HEIGHT,
-            font=(HarmonyFonts.FAMILY_FALLBACK, HarmonyFonts.SIZE_BODY),
-            dropdown_font=(HarmonyFonts.FAMILY_FALLBACK, HarmonyFonts.SIZE_BODY),
+            font=self._get_font(HarmonyFonts.SIZE_BODY),
+            dropdown_font=self._get_font(HarmonyFonts.SIZE_BODY),
             button_color=HarmonyColors.PRIMARY,
             button_hover_color=HarmonyColors.PRIMARY_HOVER,
             border_color=HarmonyColors.BORDER_LIGHT,
@@ -227,7 +307,7 @@ class HarmonyMainWindow(ctk.CTk):
         ctk.CTkLabel(
             content,
             text="排序方式",
-            font=(HarmonyFonts.FAMILY_FALLBACK, HarmonyFonts.SIZE_BODY),
+            font=self._get_font(HarmonyFonts.SIZE_BODY),
             text_color=HarmonyColors.TEXT_SECONDARY
         ).grid(row=2, column=1, sticky="w", pady=(0, HarmonySpacing.XS), padx=(HarmonySpacing.SM, 0))
 
@@ -235,8 +315,8 @@ class HarmonyMainWindow(ctk.CTk):
             content,
             values=["相关性", "发布日期", "观看次数", "评分"],
             height=HarmonySizes.INPUT_HEIGHT,
-            font=(HarmonyFonts.FAMILY_FALLBACK, HarmonyFonts.SIZE_BODY),
-            dropdown_font=(HarmonyFonts.FAMILY_FALLBACK, HarmonyFonts.SIZE_BODY),
+            font=self._get_font(HarmonyFonts.SIZE_BODY),
+            dropdown_font=self._get_font(HarmonyFonts.SIZE_BODY),
             button_color=HarmonyColors.PRIMARY,
             button_hover_color=HarmonyColors.PRIMARY_HOVER,
             border_color=HarmonyColors.BORDER_LIGHT,
@@ -249,7 +329,7 @@ class HarmonyMainWindow(ctk.CTk):
         ctk.CTkLabel(
             content,
             text="年份范围",
-            font=(HarmonyFonts.FAMILY_FALLBACK, HarmonyFonts.SIZE_BODY),
+            font=self._get_font(HarmonyFonts.SIZE_BODY),
             text_color=HarmonyColors.TEXT_SECONDARY
         ).grid(row=4, column=0, columnspan=2, sticky="w", pady=(0, HarmonySpacing.XS))
 
@@ -262,7 +342,7 @@ class HarmonyMainWindow(ctk.CTk):
         ctk.CTkLabel(
             year_frame,
             text="从",
-            font=(HarmonyFonts.FAMILY_FALLBACK, HarmonyFonts.SIZE_BODY),
+            font=self._get_font(HarmonyFonts.SIZE_BODY),
             text_color=HarmonyColors.TEXT_SECONDARY
         ).pack(side="left", padx=(0, HarmonySpacing.SM))
 
@@ -271,7 +351,7 @@ class HarmonyMainWindow(ctk.CTk):
             values=years,
             width=100,
             height=HarmonySizes.INPUT_HEIGHT,
-            font=(HarmonyFonts.FAMILY_FALLBACK, HarmonyFonts.SIZE_BODY),
+            font=self._get_font(HarmonyFonts.SIZE_BODY),
             button_color=HarmonyColors.PRIMARY,
             border_color=HarmonyColors.BORDER_LIGHT,
             corner_radius=HarmonyRadius.MEDIUM
@@ -282,7 +362,7 @@ class HarmonyMainWindow(ctk.CTk):
         ctk.CTkLabel(
             year_frame,
             text="到",
-            font=(HarmonyFonts.FAMILY_FALLBACK, HarmonyFonts.SIZE_BODY),
+            font=self._get_font(HarmonyFonts.SIZE_BODY),
             text_color=HarmonyColors.TEXT_SECONDARY
         ).pack(side="left", padx=(0, HarmonySpacing.SM))
 
@@ -291,7 +371,7 @@ class HarmonyMainWindow(ctk.CTk):
             values=years,
             width=100,
             height=HarmonySizes.INPUT_HEIGHT,
-            font=(HarmonyFonts.FAMILY_FALLBACK, HarmonyFonts.SIZE_BODY),
+            font=self._get_font(HarmonyFonts.SIZE_BODY),
             button_color=HarmonyColors.PRIMARY,
             border_color=HarmonyColors.BORDER_LIGHT,
             corner_radius=HarmonyRadius.MEDIUM
@@ -315,7 +395,7 @@ class HarmonyMainWindow(ctk.CTk):
         ctk.CTkLabel(
             header,
             text="高级选项",
-            font=(HarmonyFonts.FAMILY_FALLBACK, HarmonyFonts.SIZE_H2, HarmonyFonts.WEIGHT_MEDIUM),
+            font=self._get_font(HarmonyFonts.SIZE_H2, "medium"),
             text_color=HarmonyColors.TEXT_PRIMARY
         ).pack(side="left")
 
@@ -342,7 +422,7 @@ class HarmonyMainWindow(ctk.CTk):
 
         # 鸿蒙风格复选框
         checkbox_style = {
-            "font": (HarmonyFonts.FAMILY_FALLBACK, HarmonyFonts.SIZE_BODY),
+            "font": self._get_font(HarmonyFonts.SIZE_BODY),
             "text_color": HarmonyColors.TEXT_PRIMARY,
             "fg_color": HarmonyColors.PRIMARY,
             "hover_color": HarmonyColors.PRIMARY_HOVER,
@@ -409,7 +489,7 @@ class HarmonyMainWindow(ctk.CTk):
         self.status_label = ctk.CTkLabel(
             content,
             text="就绪",
-            font=(HarmonyFonts.FAMILY_FALLBACK, HarmonyFonts.SIZE_BODY),
+            font=self._get_font(HarmonyFonts.SIZE_BODY),
             text_color=HarmonyColors.TEXT_SECONDARY
         )
         self.status_label.pack(pady=(0, HarmonySpacing.MD))
@@ -421,11 +501,13 @@ class HarmonyMainWindow(ctk.CTk):
         # 主操作按钮
         self.start_button = ctk.CTkButton(
             btn_container,
-            text="🚀 开始搜索",
+            text=self._get_icon_text('search', "开始搜索"),
+            image=self.icons.get('search'),
             width=180,
             height=HarmonySizes.BUTTON_LARGE,
-            font=(HarmonyFonts.FAMILY_FALLBACK, HarmonyFonts.SIZE_H3, HarmonyFonts.WEIGHT_MEDIUM),
+            font=self._get_font(HarmonyFonts.SIZE_H3, "medium"),
             command=self._start_collection,
+            compound="left",
             **HarmonyPresets.primary_button()
         )
         self.start_button.pack(side="left", padx=(0, HarmonySpacing.MD))
@@ -434,11 +516,13 @@ class HarmonyMainWindow(ctk.CTk):
         self.cancel_button = ctk.CTkButton(
             btn_container,
             text="取消",
+            image=self.icons.get('cancel'),
             width=100,
             height=HarmonySizes.BUTTON_LARGE,
-            font=(HarmonyFonts.FAMILY_FALLBACK, HarmonyFonts.SIZE_BODY),
+            font=self._get_font(HarmonyFonts.SIZE_BODY),
             command=self._cancel_collection,
             state="disabled",
+            compound="left",
             **HarmonyPresets.secondary_button()
         )
         self.cancel_button.pack(side="left")
@@ -459,14 +543,14 @@ class HarmonyMainWindow(ctk.CTk):
         ctk.CTkLabel(
             header,
             text="数据预览",
-            font=(HarmonyFonts.FAMILY_FALLBACK, HarmonyFonts.SIZE_H2, HarmonyFonts.WEIGHT_MEDIUM),
+            font=self._get_font(HarmonyFonts.SIZE_H2, "medium"),
             text_color=HarmonyColors.TEXT_PRIMARY
         ).pack(side="left")
 
         self.preview_count_label = ctk.CTkLabel(
             header,
             text="(前 10 条)",
-            font=(HarmonyFonts.FAMILY_FALLBACK, HarmonyFonts.SIZE_CAPTION),
+            font=self._get_font(HarmonyFonts.SIZE_CAPTION),
             text_color=HarmonyColors.TEXT_TERTIARY
         )
         self.preview_count_label.pack(side="left", padx=(HarmonySpacing.SM, 0))
@@ -476,7 +560,7 @@ class HarmonyMainWindow(ctk.CTk):
             card,
             height=200,
             corner_radius=HarmonyRadius.MEDIUM,
-            font=(HarmonyFonts.FAMILY_FALLBACK, HarmonyFonts.SIZE_BODY),
+            font=self._get_font(HarmonyFonts.SIZE_BODY),
             fg_color=HarmonyColors.BG_TERTIARY,
             border_width=0,
             text_color=HarmonyColors.TEXT_PRIMARY
@@ -497,7 +581,7 @@ class HarmonyMainWindow(ctk.CTk):
         self.stats_label = ctk.CTkLabel(
             bottom,
             text="",
-            font=(HarmonyFonts.FAMILY_FALLBACK, HarmonyFonts.SIZE_BODY),
+            font=self._get_font(HarmonyFonts.SIZE_BODY),
             text_color=HarmonyColors.TEXT_SECONDARY
         )
         self.stats_label.pack(side="left", padx=HarmonySpacing.LG)
@@ -505,12 +589,14 @@ class HarmonyMainWindow(ctk.CTk):
         # 右侧：导出按钮
         self.export_button = ctk.CTkButton(
             bottom,
-            text="📊 导出 Excel",
+            text=self._get_icon_text('export', "导出 Excel"),
+            image=self.icons.get('export'),
             width=160,
             height=HarmonySizes.BUTTON_LARGE,
-            font=(HarmonyFonts.FAMILY_FALLBACK, HarmonyFonts.SIZE_H3, HarmonyFonts.WEIGHT_MEDIUM),
+            font=self._get_font(HarmonyFonts.SIZE_H3, "medium"),
             command=self._export_excel,
             state="disabled",
+            compound="left",
             **HarmonyPresets.success_button()
         )
         self.export_button.pack(side="right", padx=HarmonySpacing.LG, pady=HarmonySpacing.MD)
