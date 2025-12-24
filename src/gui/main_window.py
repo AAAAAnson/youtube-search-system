@@ -127,7 +127,15 @@ class MainWindow(ctk.CTk):
         bottom_frame = ctk.CTkFrame(self)
         bottom_frame.pack(fill="x", padx=10, pady=10)
 
-        self.export_button = ctk.CTkButton(bottom_frame, text="导出Excel", command=self._export_excel, state="disabled")
+        self.export_button = ctk.CTkButton(
+            bottom_frame,
+            text="📊 导出Excel",
+            command=self._export_excel,
+            state="disabled",
+            width=150,
+            height=40,
+            font=("微软雅黑", 14, "bold")
+        )
         self.export_button.pack(side="left", padx=10)
 
         self.stats_label = ctk.CTkLabel(bottom_frame, text="")
@@ -260,22 +268,32 @@ class MainWindow(ctk.CTk):
             # 启用导出按钮(如果有数据)
             if self.collected_data and len(self.collected_data) > 0:
                 self.logger.info(f"[DEBUG] 在UI线程中启用导出按钮，collected_data 有 {len(self.collected_data)} 条数据")
-                self.export_button.configure(state="normal")
+                self.export_button.configure(
+                    state="normal",
+                    fg_color=("green", "green"),  # 绿色背景使其更醒目
+                    hover_color=("darkgreen", "darkgreen")
+                )
                 # 强制更新UI
                 self.export_button.update_idletasks()
                 # 再次检查状态
                 current_state = str(self.export_button.cget("state"))
                 self.logger.info(f"[DEBUG] 导出按钮当前状态: {current_state}")
+                self.logger.info(f"[DEBUG] 导出按钮颜色已设置为绿色")
 
                 # 显示完成消息
                 if failed_count > 0:
                     messagebox.showwarning(
                         "采集完成",
                         f"采集完成！\n\n成功: {success_count} 条\n失败: {failed_count} 条\n\n" +
-                        f"失败原因：部分视频因网络问题（SSL错误）无法获取。\n建议：稍后重试或检查网络环境。"
+                        f"失败原因：部分视频因网络问题（SSL错误）无法获取。\n建议：稍后重试或检查网络环境。\n\n" +
+                        f"👉 请点击窗口左下角的【导出Excel】按钮保存数据"
                     )
                 else:
-                    messagebox.showinfo("完成", f"采集完成！共获取 {success_count} 条数据")
+                    messagebox.showinfo(
+                        "采集完成",
+                        f"采集完成！共获取 {success_count} 条数据\n\n" +
+                        f"👉 请点击窗口左下角的【导出Excel】按钮保存数据"
+                    )
             else:
                 self.logger.warning(f"[DEBUG] collected_data 为空，不启用导出按钮")
                 messagebox.showerror(
