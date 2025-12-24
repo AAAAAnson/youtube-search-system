@@ -62,17 +62,27 @@ class DataCollector:
         max_results: int = 100,
         order: str = 'relevance',
         skip_contact: bool = False,
+        year_from: Optional[int] = None,
+        year_to: Optional[int] = None,
+        exact_match: bool = False,
+        search_progress: Optional[Dict] = None,
+        search_history_manager = None,
         progress_callback: Optional[Callable] = None,
         status_callback: Optional[Callable] = None
     ) -> List[Dict]:
         """
-        执行完整的数据采集流程
+        执行完整的数据采集流程(支持断点续传和去重)
 
         Args:
             keyword: 搜索关键词
             max_results: 最大结果数
             order: 排序方式
             skip_contact: 是否跳过联系方式获取（遇到网络问题时可开启）
+            year_from: 起始年份
+            year_to: 结束年份
+            exact_match: 是否精确匹配
+            search_progress: 搜索进度信息(断点续传)
+            search_history_manager: 搜索历史管理器
             progress_callback: 进度回调 callback(percent, current, total, status)
             status_callback: 状态回调 callback(status_message)
 
@@ -87,10 +97,28 @@ class DataCollector:
             # 阶段1: 搜索视频 (0-20%)
             if status_callback:
                 status_callback("正在搜索视频...")
-            if self.logger:
-                self.logger.info(f"开始搜索关键词: {keyword}")
 
-            video_ids = self._search_videos(keyword, max_results, order, progress_callback)
+            # 从搜索进度中提取信息
+            start_page_token = None
+            existing_video_ids = []
+            if search_progress:
+                start_page_token = search_progress.get('next_page_token')
+                existing_video_ids = search_progress.get('video_ids', [])
+                if self.logger:
+                    self.logger.info(f"继续上次搜索: 已有 {len(existing_video_ids)} 个视频")
+
+            if self.logger:
+                year_info = f", 年份: {year_from or '不限'}-{year_to or '不限'}" if (year_from or year_to) else ""
+                match_info = " (精确匹配)" if exact_match else ""
+                self.logger.info(f"开始搜索关键词: {keyword}{match_info}{year_info}")
+
+            video_ids = self._search_videos(
+                keyword, max_results, order,
+                year_from, year_to, exact_match,
+                start_page_token, existing_video_ids,
+                search_history_manager,
+                progress_callback
+            )
 
             if self.cancel_event.is_set():
                 if self.logger:
@@ -174,36 +202,83 @@ class DataCollector:
         keyword: str,
         max_results: int,
         order: str,
+        year_from: Optional[int],
+        year_to: Optional[int],
+        exact_match: bool,
+        start_page_token: Optional[str],
+        existing_video_ids: List[str],
+        search_history_manager,
         progress_callback: Optional[Callable]
     ) -> List[str]:
         """
-        搜索视频ID
+        搜索视频ID(支持断点续传和去重)
 
         Args:
             keyword: 关键词
             max_results: 最大结果数
             order: 排序方式
+            year_from: 起始年份
+            year_to: 结束年份
+            exact_match: 是否精确匹配
+            start_page_token: 断点续传的页面token
+            existing_video_ids: 已有的视频ID列表(去重用)
+            search_history_manager: 搜索历史管理器
             progress_callback: 进度回调
 
         Returns:
             List[str]: 视频ID列表
         """
-        def search_progress(current, total):
+        def search_progress(current, total, next_token=None, current_video_ids=None):
+            """搜索进度回调，同时更新搜索历史"""
             if self.cancel_event.is_set():
                 return
+
+            # 更新搜索历史
+            if search_history_manager and current_video_ids:
+                is_complete = (current >= total) or (next_token is None and current > 0)
+                search_history_manager.update_search_progress(
+                    keyword=keyword,
+                    year_from=year_from,
+                    year_to=year_to,
+                    exact_match=exact_match,
+                    order=order,
+                    video_ids=current_video_ids,
+                    next_page_token=next_token,
+                    is_complete=is_complete
+                )
+
+            # 更新UI进度
             if progress_callback:
-                percent = int(20 * current / total)
+                percent = int(20 * current / total) if total > 0 else 0
                 progress_callback(percent, current, total, f"正在搜索... ({current}/{total})")
 
         video_ids = self.youtube_api.get_all_videos_from_search(
             keyword=keyword,
             max_results=max_results,
             order=order,
+            year_from=year_from,
+            year_to=year_to,
+            exact_match=exact_match,
+            start_page_token=start_page_token,
+            existing_video_ids=existing_video_ids,
             progress_callback=search_progress
         )
 
-        # 去重
+        # 去重(虽然get_all_videos_from_search已经去重了，但再做一次保险)
         video_ids = list(dict.fromkeys(video_ids))
+
+        # 标记搜索完成
+        if search_history_manager:
+            search_history_manager.update_search_progress(
+                keyword=keyword,
+                year_from=year_from,
+                year_to=year_to,
+                exact_match=exact_match,
+                order=order,
+                video_ids=video_ids,
+                next_page_token=None,
+                is_complete=True
+            )
 
         return video_ids
 

@@ -439,23 +439,39 @@ class YouTubeAPI:
         keyword: str,
         max_results: int = 1000,
         order: str = 'relevance',
+        year_from: Optional[int] = None,
+        year_to: Optional[int] = None,
+        exact_match: bool = False,
+        start_page_token: Optional[str] = None,
+        existing_video_ids: Optional[List[str]] = None,
         progress_callback=None
     ) -> List[str]:
         """
-        获取搜索的所有视频ID（自动翻页）
+        获取搜索的所有视频ID（自动翻页,支持断点续传和去重）
 
         Args:
             keyword: 搜索关键词
             max_results: 最大结果数
             order: 排序方式
+            year_from: 起始年份
+            year_to: 结束年份
+            exact_match: 是否精确匹配
+            start_page_token: 起始页token(断点续传)
+            existing_video_ids: 已有的视频ID列表(去重)
             progress_callback: 进度回调函数 callback(current, total)
 
         Returns:
-            List[str]: 视频ID列表
+            List[str]: 视频ID列表(已去重)
         """
-        all_video_ids = []
-        next_page_token = None
-        page_count = 0
+        # 初始化已有ID集合用于去重
+        seen_ids = set(existing_video_ids) if existing_video_ids else set()
+        all_video_ids = list(existing_video_ids) if existing_video_ids else []
+
+        next_page_token = start_page_token
+        page_count = len(all_video_ids) // 50  # 从已有记录推算页数
+
+        if self.logger and start_page_token:
+            self.logger.info(f"从上次中断处继续搜索,已有 {len(all_video_ids)} 个视频")
 
         while len(all_video_ids) < max_results:
             # 计算本次请求数量
@@ -467,21 +483,39 @@ class YouTubeAPI:
                 keyword=keyword,
                 max_results=page_size,
                 order=order,
-                page_token=next_page_token
+                page_token=next_page_token,
+                year_from=year_from,
+                year_to=year_to,
+                exact_match=exact_match
             )
 
             if not video_ids:
                 break
 
-            all_video_ids.extend(video_ids)
+            # 去重添加
+            new_count = 0
+            for vid in video_ids:
+                if vid not in seen_ids:
+                    seen_ids.add(vid)
+                    all_video_ids.append(vid)
+                    new_count += 1
+
             page_count += 1
+
+            if self.logger and new_count < len(video_ids):
+                self.logger.info(f"第 {page_count} 页去重: 原 {len(video_ids)} 个,新增 {new_count} 个")
 
             if self.logger:
                 self.logger.info(f"第 {page_count} 页，累计 {len(all_video_ids)} 个视频")
 
-            # 进度回调
+            # 进度回调(传递next_token和当前视频ID列表用于搜索历史更新)
             if progress_callback:
-                progress_callback(len(all_video_ids), max_results)
+                progress_callback(
+                    len(all_video_ids),
+                    max_results,
+                    next_token=next_page_token,
+                    current_video_ids=all_video_ids.copy()
+                )
 
             # 没有下一页了
             if not next_page_token:
