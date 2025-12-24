@@ -114,13 +114,13 @@ class MainWindow(ctk.CTk):
         self.cancel_button = ctk.CTkButton(progress_frame, text="取消", command=self._cancel_collection, state="disabled")
         self.cancel_button.pack(pady=5)
 
-        # 数据预览区域
+        # 数据预览区域 (固定高度,不扩展)
         preview_frame = ctk.CTkFrame(self)
-        preview_frame.pack(fill="both", expand=True, padx=10, pady=5)
+        preview_frame.pack(fill="x", padx=10, pady=5)  # 改为 fill="x" 而不是 fill="both", expand=True
 
         ctk.CTkLabel(preview_frame, text="数据预览（前10条）", font=("微软雅黑", 14, "bold")).pack(pady=5)
 
-        self.preview_text = ctk.CTkTextbox(preview_frame, width=850, height=200)
+        self.preview_text = ctk.CTkTextbox(preview_frame, width=850, height=180)  # 固定高度180
         self.preview_text.pack(padx=10, pady=5)
 
         # 底部按钮
