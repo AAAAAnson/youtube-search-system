@@ -434,18 +434,39 @@ class DataCollector:
             # 从 YouTube API 获取频道信息
             channel_info = self.youtube_api.get_channel_info(channel_id)
             if not channel_info:
-                return None
+                if self.logger:
+                    self.logger.warning(f"无法获取频道信息: {channel_id}")
+                # 返回默认数据，避免整个采集失败
+                return {
+                    'contact_info': '获取失败',
+                    'subscriber_count': 0,
+                    'channel_link': f'https://www.youtube.com/channel/{channel_id}'
+                }
 
             # 提取联系方式（使用 DeepSeek AI）
             description = channel_info.get('description', '')
             contact_info = '无'
 
-            if description:
-                success, extracted_contact = self.deepseek_api.extract_contact_info(description)
-                if success:
-                    contact_info = extracted_contact
+            if description and self.deepseek_api:
+                try:
+                    success, extracted_contact = self.deepseek_api.extract_contact_info(description)
+                    if success:
+                        contact_info = extracted_contact
+                    else:
+                        contact_info = '提取失败'
+                        if self.logger:
+                            self.logger.warning(f"DeepSeek 提取联系方式失败: {channel_id}")
+                except Exception as deepseek_error:
+                    # DeepSeek API 调用失败（如SSL错误）
+                    contact_info = '网络错误'
+                    if self.logger:
+                        error_str = str(deepseek_error)
+                        if 'SSL' in error_str:
+                            self.logger.error(f"DeepSeek API SSL 错误 ({channel_id}): {deepseek_error}")
+                        else:
+                            self.logger.error(f"DeepSeek API 调用失败 ({channel_id}): {deepseek_error}")
 
-                # 保存到缓存
+                # 保存到缓存（即使失败也缓存，避免重复请求）
                 self.cache_manager.set_channel_contact(
                     channel_id=channel_id,
                     contact_info=contact_info,
@@ -472,7 +493,12 @@ class DataCollector:
         except Exception as e:
             if self.logger:
                 self.logger.error(f"处理频道 {channel_id} 时出错: {e}")
-            return None
+            # 返回默认数据，而不是 None，避免整个采集失败
+            return {
+                'contact_info': '获取失败',
+                'subscriber_count': 0,
+                'channel_link': f'https://www.youtube.com/channel/{channel_id}'
+            }
 
     def _assemble_final_data_without_contact(
         self,
