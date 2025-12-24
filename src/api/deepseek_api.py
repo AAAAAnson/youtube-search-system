@@ -148,7 +148,8 @@ class DeepSeekAPI:
                 self.API_URL,
                 headers=self.headers,
                 json=payload,
-                timeout=30
+                timeout=10,  # 减少超时时间从30秒到10秒
+                verify=True  # 确保SSL验证开启
             )
 
             if response.status_code == 200:
@@ -160,6 +161,11 @@ class DeepSeekAPI:
                     self.logger.error(f"DeepSeek API 返回错误: {response.status_code} - {response.text}")
                 return None
 
+        except requests.exceptions.SSLError as e:
+            # SSL 错误单独处理
+            if self.logger:
+                self.logger.error(f"DeepSeek API SSL 错误: {e}")
+            raise  # 重新抛出,让上层处理
         except requests.exceptions.Timeout:
             if self.logger:
                 self.logger.error("DeepSeek API 请求超时")

@@ -340,16 +340,16 @@ class DataCollector:
                 futures[future] = channel_id
 
                 # 控制请求间隔
-                time.sleep(0.15)
+                time.sleep(0.2)  # 增加间隔从0.15到0.2秒
 
-            # 收集频道数据
-            for future in as_completed(futures):
+            # 收集频道数据(添加超时控制)
+            for future in as_completed(futures, timeout=120):  # 最多等待120秒
                 if self.cancel_event.is_set():
                     break
 
                 channel_id = futures[future]
                 try:
-                    channel_data = future.result()
+                    channel_data = future.result(timeout=30)  # 单个请求最多30秒
                     if channel_data:
                         channel_data_cache[channel_id] = channel_data
 
@@ -365,9 +365,14 @@ class DataCollector:
                             f"正在获取频道信息... ({processed_channels}/{total_channels})"
                         )
 
+                except TimeoutError:
+                    if self.logger:
+                        self.logger.error(f"获取频道数据超时 ({channel_id})")
+                    processed_channels += 1
                 except Exception as e:
                     if self.logger:
                         self.logger.error(f"获取频道数据失败 ({channel_id}): {e}")
+                    processed_channels += 1
 
         # 组装最终数据
         final_data = []
