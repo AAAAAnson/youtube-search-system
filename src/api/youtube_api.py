@@ -235,18 +235,28 @@ class YouTubeAPI:
                 # SSL 错误或网络错误，可以重试
                 error_str = str(e).lower()
                 is_retryable = any(keyword in error_str for keyword in [
-                    'ssl', 'timeout', 'connection', 'network', 'socket'
+                    'ssl', 'timeout', 'connection', 'network', 'socket', 'nonetype', 'read', 'attribute'
                 ])
 
                 if is_retryable and attempt < max_retries - 1:
-                    wait_time = 2 * (attempt + 1)
+                    wait_time = 3 * (attempt + 1)  # 增加等待时间
                     if self.logger:
                         self.logger.warning(f"网络错误 (尝试 {attempt + 1}/{max_retries}): {e}，{wait_time}秒后重试")
                     time.sleep(wait_time)
+
+                    # SSL错误时,重新初始化客户端
+                    if 'ssl' in error_str or 'nonetype' in error_str:
+                        if self.logger:
+                            self.logger.info("检测到SSL/连接错误,重新初始化YouTube客户端")
+                        try:
+                            self._initialize_youtube_client()
+                        except:
+                            pass
+
                     continue
                 else:
                     if self.logger:
-                        self.logger.error(f"未知错误: {e}")
+                        self.logger.error(f"请求最终失败 ({max_retries}次尝试后): {e}")
                     return None
 
         return None
