@@ -231,38 +231,60 @@ class MainWindow(ctk.CTk):
         self.logger.info(f"[DEBUG] stats: {stats}")
         self.logger.info(f"[DEBUG] collected_data 长度: {len(self.collected_data)}")
 
-        self.after(0, self._reset_ui)
-        self.after(0, lambda: self._show_preview())
-
         success_count = len(self.collected_data)
         failed_count = stats.get('failed', 0)
         total_count = stats.get('total', 0)
 
         self.logger.info(f"[DEBUG] success_count={success_count}, failed_count={failed_count}, total_count={total_count}")
 
-        self.after(0, lambda: self.stats_label.configure(
-            text=f"成功: {success_count} 条, 失败: {failed_count} 条 (总计: {total_count})"
-        ))
+        # 统一在一个 after 回调中更新所有UI
+        def update_ui():
+            # 重置UI状态
+            self.is_collecting = False
+            self.start_button.configure(state="normal")
+            self.cancel_button.configure(state="disabled")
+            self.progress_bar.set(0)
 
-        if self.collected_data and len(self.collected_data) > 0:
-            self.logger.info(f"[DEBUG] 准备启用导出按钮，collected_data 有 {len(self.collected_data)} 条数据")
-            self.after(0, lambda: self.export_button.configure(state="normal"))
-            self.logger.info(f"[DEBUG] 导出按钮已设置为 normal 状态")
+            # 更新统计信息
+            self.stats_label.configure(
+                text=f"成功: {success_count} 条, 失败: {failed_count} 条 (总计: {total_count})"
+            )
 
-            if failed_count > 0:
-                self.after(0, lambda: messagebox.showwarning(
-                    "采集完成",
-                    f"采集完成！\n\n成功: {success_count} 条\n失败: {failed_count} 条\n\n" +
-                    f"失败原因：部分视频因网络问题（SSL错误）无法获取。\n建议：稍后重试或检查网络环境。"
-                ))
+            # 显示预览
+            self.preview_text.delete("1.0", "end")
+            preview_data = self.collected_data[:10]
+            for i, item in enumerate(preview_data, 1):
+                preview = f"{i}. {item['channel_title']} | {item['video_title'][:30]}... | 播放: {item['view_count']} | 互动率: {item['engagement_rate']}\n"
+                self.preview_text.insert("end", preview)
+
+            # 启用导出按钮(如果有数据)
+            if self.collected_data and len(self.collected_data) > 0:
+                self.logger.info(f"[DEBUG] 在UI线程中启用导出按钮，collected_data 有 {len(self.collected_data)} 条数据")
+                self.export_button.configure(state="normal")
+                # 强制更新UI
+                self.export_button.update_idletasks()
+                # 再次检查状态
+                current_state = str(self.export_button.cget("state"))
+                self.logger.info(f"[DEBUG] 导出按钮当前状态: {current_state}")
+
+                # 显示完成消息
+                if failed_count > 0:
+                    messagebox.showwarning(
+                        "采集完成",
+                        f"采集完成！\n\n成功: {success_count} 条\n失败: {failed_count} 条\n\n" +
+                        f"失败原因：部分视频因网络问题（SSL错误）无法获取。\n建议：稍后重试或检查网络环境。"
+                    )
+                else:
+                    messagebox.showinfo("完成", f"采集完成！共获取 {success_count} 条数据")
             else:
-                self.after(0, lambda: messagebox.showinfo("完成", f"采集完成！共获取 {success_count} 条数据"))
-        else:
-            self.logger.warning(f"[DEBUG] collected_data 为空，不启用导出按钮")
-            self.after(0, lambda: messagebox.showerror(
-                "失败",
-                "采集失败，未获取到任何数据。\n\n可能原因：\n1. 网络连接问题（SSL错误）\n2. API Key无效\n\n请检查日志了解详情。"
-            ))
+                self.logger.warning(f"[DEBUG] collected_data 为空，不启用导出按钮")
+                messagebox.showerror(
+                    "失败",
+                    "采集失败，未获取到任何数据。\n\n可能原因：\n1. 网络连接问题（SSL错误）\n2. API Key无效\n\n请检查日志了解详情。"
+                )
+
+        # 使用单个 after 调用更新所有UI
+        self.after(0, update_ui)
 
     def _show_preview(self):
         """显示数据预览"""
