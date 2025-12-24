@@ -29,7 +29,7 @@ class MainWindow(ctk.CTk):
 
         # 窗口配置
         self.title("YouTube 数据采集工具 v1.0.0")
-        self.geometry("900x700")
+        self.geometry("900x800")  # 增加高度从700到800,确保底部按钮可见
 
         # 设置主题
         ctk.set_appearance_mode("light")

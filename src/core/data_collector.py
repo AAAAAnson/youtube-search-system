@@ -230,8 +230,8 @@ class DataCollector:
         batch_size = 50
         batches = [video_ids[i:i+batch_size] for i in range(0, len(video_ids), batch_size)]
 
-        # 使用线程池并发处理（控制并发数为5，避免SSL错误）
-        with ThreadPoolExecutor(max_workers=5) as executor:
+        # 改为单线程处理，避免并发导致的SSL错误
+        with ThreadPoolExecutor(max_workers=1) as executor:
             futures = {}
 
             for batch in batches:
@@ -328,8 +328,8 @@ class DataCollector:
         # 频道数据缓存（本次采集session内）
         channel_data_cache = {}
 
-        # 使用线程池并发获取频道信息（控制并发数为3，进一步降低SSL错误）
-        with ThreadPoolExecutor(max_workers=3) as executor:
+        # 改为单线程处理，避免并发导致的SSL错误
+        with ThreadPoolExecutor(max_workers=1) as executor:
             futures = {}
 
             for channel_id in channel_ids:
